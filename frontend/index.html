@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FedCredit Score — AI Financial Intelligence Engine</title>
+  <meta name="description"
+    content="Upload financial documents and receive a federated AI-powered credit score with risk analysis and loan recommendations." />
+
+  <!-- Tailwind CSS (CDN) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="/css/style.css" />
+
+  <!-- Alpine.js -->
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+  <!-- Three.js -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+</head>
+
+<body>
+  <!-- Three.js Background -->
+  <canvas id="three-canvas"></canvas>
+
+  <!-- Main Content -->
+  <div class="main-content" x-data="uploadApp">
+
+    <!-- ── Header ── -->
+    <div class="logo-icon">🏦</div>
+    <h1 class="title-main">FedCredit Score</h1>
+    <p class="subtitle">AI Financial Intelligence Engine — Federated Credit Scoring</p>
+
+    <!-- ── Upload Card ── -->
+    <div class="upload-container glass-card">
+
+      <p class="section-label">Upload Documents</p>
+
+      <!-- Drop Zone -->
+      <div class="upload-zone" :class="{ 'drag-over': dragOver }" @dragover.prevent="dragOver = true"
+        @dragleave.prevent="dragOver = false" @drop.prevent="onDrop($event)" @click="$refs.fileInput.click()"
+        id="upload-dropzone">
+        <div class="upload-icon">📄</div>
+        <h3>Drag &amp; Drop Financial Documents</h3>
+        <p>or click to browse files</p>
+        <div class="file-types">
+          <span class="file-type-badge">PDF</span>
+          <span class="file-type-badge">DOC / DOCX</span>
+          <span class="file-type-badge">XLSX</span>
+        </div>
+        <input type="file" x-ref="fileInput" @change="onFileSelect($event)" multiple accept=".pdf,.doc,.docx,.xls,.xlsx"
+          style="display:none" id="file-input" />
+      </div>
+
+      <!-- File List -->
+      <div class="file-list" x-show="files.length > 0">
+        <template x-for="(file, index) in files" :key="index">
+          <div class="file-item">
+            <span class="file-name" x-text="file.name"></span>
+            <span class="file-size" x-text="formatSize(file.size)"></span>
+            <button class="file-remove" @click="removeFile(index)" title="Remove">✕</button>
+          </div>
+        </template>
+      </div>
+
+      <!-- ── Company Info ── -->
+      <div class="form-group">
+        <label class="form-label" for="gstin-input">GSTIN / CIN</label>
+        <input type="text" class="form-input" id="gstin-input" placeholder="e.g. 29ABCDE1234F1Z5" x-model="gstin" />
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="location-input">Company Location</label>
+        <input type="text" class="form-input" id="location-input" placeholder="e.g. Bangalore, Karnataka"
+          x-model="location" />
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="insights-input">Operational Insights (optional)</label>
+        <textarea class="form-textarea" id="insights-input"
+          placeholder="e.g. 80% capacity utilization, expanding to 3 new states" x-model="insights"></textarea>
+      </div>
+
+      <!-- ── Analyze Button ── -->
+      <button class="btn-primary" @click="analyze()" :disabled="files.length === 0 || isProcessing" id="analyze-btn">
+        <span x-show="!isProcessing">🔍 Analyze Company</span>
+        <span x-show="isProcessing">Processing…</span>
+      </button>
+    </div>
+
+    <!-- ── Processing Overlay ── -->
+    <div class="processing-overlay" x-show="isProcessing" x-transition.opacity>
+      <div class="processing-spinner"></div>
+      <div class="processing-messages">
+        <template x-for="(step, i) in processingSteps" :key="i">
+          <div class="processing-step" :class="{
+              'active': i === processingStep,
+              'done': i < processingStep,
+            }" x-text="step"></div>
+        </template>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Scripts -->
+  <script src="/js/three-bg.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+
+</html>
