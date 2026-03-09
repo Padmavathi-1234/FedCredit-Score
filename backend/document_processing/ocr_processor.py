@@ -86,3 +86,27 @@ def process_scanned_pdf(file_path: str) -> Dict[str, Any]:
     extracted["raw_text"] = full_text[:3000]
     extracted["source"] = "ocr"
     return extracted
+
+
+def process_image(file_path: str) -> Dict[str, Any]:
+    """OCR a standalone image file (JPG, PNG, TIFF)."""
+    if pytesseract is None or Image is None:
+        return {
+            "error": "pytesseract / Pillow are required for OCR",
+            "source": "ocr_image",
+        }
+
+    try:
+        processed = _preprocess_image(file_path)
+        text = pytesseract.image_to_string(Image.open(processed))
+    except Exception as e:
+        return {"error": str(e), "source": "ocr_image"}
+
+    full_text = text.strip()
+
+    from backend.document_processing.pdf_processor import _extract_financial_values
+
+    extracted = _extract_financial_values(full_text)
+    extracted["raw_text"] = full_text[:3000]
+    extracted["source"] = "ocr_image"
+    return extracted

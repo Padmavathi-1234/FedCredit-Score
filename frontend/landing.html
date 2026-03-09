@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FedCredit Score — AI Financial Intelligence Engine</title>
+  <meta name="description"
+    content="FedCredit Score is an AI-powered federated credit scoring engine that analyzes financial documents, verifies company authenticity, and delivers comprehensive credit assessments." />
+
+  <!-- Tailwind CSS (CDN) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="/css/style.css" />
+
+  <!-- Alpine.js for Auth state -->
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+  <!-- Three.js -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+
+  <style>
+    /* ── Landing-specific styles ── */
+    .landing-hero {
+      text-align: center;
+      max-width: 800px;
+      margin: 0 auto 60px;
+    }
+
+    .hero-badge {
+      display: inline-block;
+      background: rgba(99, 102, 241, 0.15);
+      color: var(--accent-indigo);
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      border-radius: 20px;
+      padding: 6px 18px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 24px;
+      animation: fadeInDown 0.8s ease;
+    }
+
+    .hero-title {
+      font-size: 3.5rem;
+      font-weight: 900;
+      background: var(--gradient-primary);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      line-height: 1.1;
+      margin-bottom: 20px;
+      letter-spacing: -0.03em;
+      animation: fadeInUp 0.8s ease 0.1s both;
+    }
+
+    .hero-subtitle {
+      font-size: 1.2rem;
+      color: var(--text-secondary);
+      line-height: 1.7;
+      max-width: 640px;
+      margin: 0 auto 36px;
+      animation: fadeInUp 0.8s ease 0.25s both;
+    }
+
+    .hero-cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 18px 48px;
+      background: var(--gradient-primary);
+      color: white;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-family: var(--font);
+      font-size: 1.1rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+      text-decoration: none;
+      letter-spacing: 0.02em;
+      animation: fadeInUp 0.8s ease 0.4s both;
+    }
+
+    .hero-cta:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 12px 40px rgba(99, 102, 241, 0.45);
+    }
+
+    .hero-cta:active {
+      transform: translateY(0);
+    }
+
+    /* Pipeline Section */
+    .pipeline-section {
+      max-width: 1100px;
+      width: 100%;
+      margin: 0 auto;
+    }
+
+    .pipeline-title {
+      text-align: center;
+      font-size: 1.8rem;
+      font-weight: 800;
+      color: var(--text-primary);
+      margin-bottom: 8px;
+      animation: fadeInUp 0.8s ease 0.5s both;
+    }
+
+    .pipeline-subtitle {
+      text-align: center;
+      font-size: 0.95rem;
+      color: var(--text-secondary);
+      max-width: 600px;
+      margin: 0 auto 40px;
+      animation: fadeInUp 0.8s ease 0.6s both;
+    }
+
+    .pipeline-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+    }
+
+    .pipeline-card {
+      background: var(--bg-card);
+      backdrop-filter: blur(20px);
+      border: 1px solid var(--border-card);
+      border-radius: var(--radius);
+      padding: 28px;
+      transition: all 0.4s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .pipeline-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: var(--gradient-primary);
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    .pipeline-card:hover {
+      border-color: var(--border-glow);
+      box-shadow: var(--shadow-card), var(--shadow-glow);
+      transform: translateY(-4px);
+    }
+
+    .pipeline-card:hover::before {
+      opacity: 1;
+    }
+
+    .pipeline-step-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--gradient-primary);
+      color: white;
+      font-size: 0.85rem;
+      font-weight: 800;
+      margin-bottom: 14px;
+      font-family: var(--font-mono);
+    }
+
+    .pipeline-card-icon {
+      font-size: 1.6rem;
+      margin-bottom: 12px;
+      display: block;
+    }
+
+    .pipeline-card-title {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 8px;
+    }
+
+    .pipeline-card-desc {
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+
+    .pipeline-card-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 14px;
+    }
+
+    .pipeline-tag {
+      background: rgba(99, 102, 241, 0.1);
+      color: var(--accent-indigo);
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      font-family: var(--font-mono);
+    }
+
+    /* Stats Bar */
+    .stats-bar {
+      display: flex;
+      justify-content: center;
+      gap: 60px;
+      flex-wrap: wrap;
+      margin: 60px auto 0;
+      max-width: 900px;
+      animation: fadeInUp 0.8s ease 0.7s both;
+    }
+
+    .stat-item {
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 2rem;
+      font-weight: 900;
+      background: var(--gradient-primary);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      font-family: var(--font-mono);
+    }
+
+    .stat-label {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-top: 4px;
+    }
+
+    /* Footer */
+    .landing-footer {
+      text-align: center;
+      margin-top: 60px;
+      padding: 20px;
+      color: var(--text-muted);
+      font-size: 0.8rem;
+    }
+
+    /* Animations */
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(24px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes fadeInDown {
+      from {
+        opacity: 0;
+        transform: translateY(-16px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .pipeline-card {
+      animation: fadeInUp 0.6s ease both;
+    }
+
+    .pipeline-card:nth-child(1) {
+      animation-delay: 0.55s;
+    }
+
+    .pipeline-card:nth-child(2) {
+      animation-delay: 0.65s;
+    }
+
+    .pipeline-card:nth-child(3) {
+      animation-delay: 0.75s;
+    }
+
+    .pipeline-card:nth-child(4) {
+      animation-delay: 0.85s;
+    }
+
+    .pipeline-card:nth-child(5) {
+      animation-delay: 0.95s;
+    }
+
+    .pipeline-card:nth-child(6) {
+      animation-delay: 1.05s;
+    }
+
+    .pipeline-card:nth-child(7) {
+      animation-delay: 1.15s;
+    }
+
+    .pipeline-card:nth-child(8) {
+      animation-delay: 1.25s;
+    }
+
+    .pipeline-card:nth-child(9) {
+      animation-delay: 1.35s;
+    }
+
+    @media (max-width: 768px) {
+      .hero-title {
+        font-size: 2.2rem;
+      }
+
+      .hero-subtitle {
+        font-size: 1rem;
+      }
+
+      .stats-bar {
+        gap: 30px;
+      }
+
+      .stat-value {
+        font-size: 1.5rem;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <!-- Three.js Background -->
+  <canvas id="three-canvas"></canvas>
+
+  <!-- Top Navigation (Auth) -->
+  <div class="absolute top-6 right-8 z-50 mix-blend-difference" x-data="{ token: localStorage.getItem('token') }">
+    <template x-if="!token">
+      <a href="/login" class="text-indigo-400 font-semibold hover:text-indigo-300 transition-colors">Sign In</a>
+    </template>
+    <template x-if="token">
+      <a href="/dashboard" class="text-indigo-400 font-semibold hover:text-indigo-300 transition-colors">My Dashboard
+        &rarr;</a>
+    </template>
+  </div>
+
+  <!-- Main Content -->
+  <div class="main-content">
+
+    <!-- ── Hero Section ── -->
+    <section class="landing-hero">
+      <div class="hero-badge">🔒 AI-Powered Federated Credit Scoring</div>
+
+      <h1 class="hero-title">Smarter Credit Decisions,<br />Powered by Intelligence</h1>
+
+      <p class="hero-subtitle">
+        FedCredit Score is an AI Financial Intelligence Engine that ingests financial documents,
+        extracts and validates data, verifies company authenticity through GSTIN,
+        and produces comprehensive credit assessments using a federated multi-bank scoring model
+        — all from a single upload.
+      </p>
+
+      <a href="/upload" class="hero-cta">
+        🚀 Start Credit Analysis
+      </a>
+    </section>
+
+    <!-- ── Pipeline Steps ── -->
+    <section class="pipeline-section">
+      <h2 class="pipeline-title">How It Works</h2>
+      <p class="pipeline-subtitle">
+        Nine intelligent layers transform raw documents into actionable credit insights.
+      </p>
+
+      <div class="pipeline-grid">
+
+        <!-- Step 1 -->
+        <div class="pipeline-card">
+          <div class="pipeline-step-num">1</div>
+          <span class="pipeline-card-icon">📄</span>
+          <div class="pipeline-card-title">Document Upload</div>
+          <div class="pipeline-card-desc">
+            Upload financial documents in any format. Our system handles multi-file
+            ingestion with drag-and-drop ease.
+          </div>
+          <div class="pipeline-card-tags">
+            <span class="pipeline-tag">PDF</span>
+            <span class="pipeline-tag">EXCEL</span>
+            <span class="pipeline-tag">CSV</span>
+            <span class="pipeline-tag">IMAGES</span>
+            <span class="pipeline-tag">DOCX</span>
+          </div>
+        </div>
+
+        <!-- Step 2 -->
+        <div class="pipeline-card">
+          <div class="pipeline-step-num">2</div>
+          <span class="pipeline-card-icon">🔍</span>
+          <div class="pipeline-card-title">Data Extraction</div>
+          <div class="pipeline-card-desc">
+            Automated extraction of GSTIN, company name, financials, and tabular records
+            using OCR, table parsing, and intelligent pattern matching.
+          </div>
+          <div class="pipeline-card-tags">
+            <span class="pipeline-tag">OCR</span>
+            <span class="pipeline-tag">TABLE PARSING</span>
+            <span class="pipeline-tag">REGEX</span>
+          </div>
+        </div>
+
+        <!-- Step 3 -->
+        <div class="pipeline-card">
+          <div class="pipeline-step-num">3</div>
+          <span class="pipeline-card-icon">🧹</span>
+          <div class="pipeline-card-title">Data Cleaning</div>
+          <div class="pipeline-card-desc">
+            Deduplication, missing value handling, format normalization, and
+            detection of inconsistent financial figures before analysis.
+          </div>
+          <div class="pipeline-card-tags">
+            <span class="pipeline-tag">DEDUP</span>
+            <span class="pipeline-tag">NORMALIZATION</span>
+            <span class="pipeline-tag">VALIDATION</span>
+          </div>
+        </div>
+
+        <!-- Step 4 -->
+        <div class="pipeline-card">
+          <div class="pipeline-step-num">4</div>
+          <span class="pipeline-card-icon">✅</span>
+          <div class="pipeline-card-title">Field Validation</div>
+          <div class="pipeline-card-desc">
+            Mandatory field checks ensure GSTIN, company location, and financial data
+            are present and valid before proceeding to analysis.
+          </div>
+          <div class="pipeline-card-tags">
+            <span class="pipeline-tag">GSTIN CHECK</span>
+            <span class="pipeline-tag">MANDATORY FIELDS</span>
+          </div>
+        </div>
+
+        <!-- Step 5 -->
+        <div class="pipeline-card">
+          <div class="pipeline-step-num">5</div>
+          <span class="pipeline-card-icon">🏢</span>
+          <div class="pipeline-card-title">Company Verification</div>
+          <div class="pipeline-card-desc">
+            Cross-reference GSTIN with declared location using state-code matching
+            to confirm company authenticity before scoring.
+          </div>
+          <div class="pipeline-card-tags">
+            <span class="pipeline-tag">GSTIN VERIFY</span>
+            <span class="pipeline-tag">LOCATION MATCH</span>
+          </div>
+        </div>
+
+        <!-- Step 6 -->
+        <div class="pipeline-card">
+          <div class="pipeline-step-num">6</div>
+          <span class="pipeline-card-icon">🛰️</span>
+          <div class="pipeline-card-title">Satellite NDVI Analysis</div>
+          <div class="pipeline-card-desc">
+            Monitor physical asset activity using satellite imagery and vegetation indices (NDVI)
+            to detect factory operation levels and business activity over time.
+          </div>
+          <div class="pipeline-card-tags">
+            <span class="pipeline-tag">SATELLITE ORBIT</span>
+            <span class="pipeline-tag">NDVI DATA</span>
+            <span class="pipeline-tag">ASSET TRACKING</span>
+          </div>
+        </div>
+
+        <!-- Step 7 -->
+        <div class="pipeline-card">
+          <div class="pipeline-step-num">7</div>
+          <span class="pipeline-card-icon">🧠</span>
+          <div class="pipeline-card-title">Federated Analysis</div>
+          <div class="pipeline-card-desc">
+            Three independent bank models evaluate the company from financial, compliance,
+            and market angles — then federate into a single consensus score.
+          </div>
+          <div class="pipeline-card-tags">
+            <span class="pipeline-tag">5Cs CREDIT</span>
+            <span class="pipeline-tag">MULTI-BANK</span>
+            <span class="pipeline-tag">AI SCORING</span>
+          </div>
+        </div>
+
+        <!-- Step 8 -->
+        <div class="pipeline-card">
+          <div class="pipeline-step-num">8</div>
+          <span class="pipeline-card-icon">💡</span>
+          <div class="pipeline-card-title">Insights Generation</div>
+          <div class="pipeline-card-desc">
+            AI-driven dynamic insights with risk breakdown, intelligent loan recommendations,
+            and detailed 5Cs credit narrative based on the federated score.
+          </div>
+          <div class="pipeline-card-tags">
+            <span class="pipeline-tag">DASHBOARD</span>
+            <span class="pipeline-tag">LOAN ENGINE</span>
+            <span class="pipeline-tag">RISK NARRATIVE</span>
+          </div>
+        </div>
+
+        <!-- Step 9 -->
+        <div class="pipeline-card">
+          <div class="pipeline-step-num">9</div>
+          <span class="pipeline-card-icon">📊</span>
+          <div class="pipeline-card-title">Credit Report</div>
+          <div class="pipeline-card-desc">
+            Export a comprehensive, professional, and downloadable PDF credit report
+            summarizing all findings, models, intelligence signals, and final decisions.
+          </div>
+          <div class="pipeline-card-tags">
+            <span class="pipeline-tag">PDF REPORT</span>
+            <span class="pipeline-tag">AUDIT TRAIL</span>
+            <span class="pipeline-tag">EXPORT</span>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ── Stats ── -->
+    <div class="stats-bar">
+      <div class="stat-item">
+        <div class="stat-value">9</div>
+        <div class="stat-label">Pipeline Layers</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value">5C</div>
+        <div class="stat-label">Credit Analysis</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value">3</div>
+        <div class="stat-label">Bank Models</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value">5+</div>
+        <div class="stat-label">File Formats</div>
+      </div>
+    </div>
+
+    <!-- ── Footer ── -->
+    <div class="landing-footer">
+      FedCredit Score — AI Financial Intelligence Engine &copy; 2026
+    </div>
+
+  </div>
+
+  <!-- Scripts -->
+  <script src="/js/three-bg.js"></script>
+</body>
+
+</html>

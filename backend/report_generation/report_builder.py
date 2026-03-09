@@ -1,366 +1,372 @@
 """
-Report Builder — generates a branded PDF credit report using ReportLab.
-Now includes 5Cs of Credit Analysis section with full explanations.
+Report Builder — generates a branded PDF Credit Appraisal Memorandum (CAM)
+using python-docx and docx2pdf.
 """
 
+import os
 import io
+import re
+import tempfile
+import uuid
+import logging
 from typing import Dict, Any
 
-from reportlab.lib import colors
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import mm
-from reportlab.platypus import (
-    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
-    HRFlowable,
-)
-from reportlab.lib.enums import TA_CENTER, TA_LEFT
-from reportlab.graphics.shapes import Drawing
-from reportlab.graphics.charts.piecharts import Pie
+from docx import Document
+from docx.shared import Pt, Inches, RGBColor
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.table import WD_TABLE_ALIGNMENT
 
+logger = logging.getLogger(__name__)
 
-def _build_pie_chart(breakdown: Dict[str, float]) -> Drawing:
-    """Create a ReportLab pie chart from risk breakdown data."""
-    d = Drawing(300, 200)
-    pie = Pie()
-    pie.x = 50
-    pie.y = 20
-    pie.width = 150
-    pie.height = 150
-    pie.data = list(breakdown.values())
-    pie.labels = list(breakdown.keys())
-    pie.slices.strokeWidth = 0.5
+def _add_markdown_para(doc, text: str, bold_all: bool = False, italic: bool = False):
+    """
+    Add a paragraph to the document, converting markdown `**bold**` into bold runs.
+    """
+    p = doc.add_paragraph()
+    if not text:
+        return p
+        
+    parts = re.split(r'\*\*(.*?)\*\*', text)
+    for i, part in enumerate(parts):
+        if not part:
+            continue
+        run = p.add_run(part)
+        
+        # Odd indices are the captured bold groups
+        if i % 2 == 1 or bold_all:
+            run.bold = True
+            
+        if italic:
+            run.italic = True
+    return p
 
-    chart_colors = [
-        colors.HexColor("#6366f1"),
-        colors.HexColor("#22d3ee"),
-        colors.HexColor("#f59e0b"),
-        colors.HexColor("#10b981"),
-    ]
-    for i, c in enumerate(chart_colors[: len(breakdown)]):
-        pie.slices[i].fillColor = c
+def _create_styled_table(doc, rows_data, col_widths=None):
+    """Helper to create a shaded, grid-styled table."""
+    if not rows_data:
+        return None
+        
+    table = doc.add_table(rows=len(rows_data), cols=len(rows_data[0]))
+    table.style = 'Light Shading Accent 1'
+    table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    table.autofit = True
 
-    d.add(pie)
-    return d
-
+    for r_idx, row_data in enumerate(rows_data):
+        row_cells = table.rows[r_idx].cells
+        for c_idx, cell_data in enumerate(row_data):
+            # Write text safely
+            cell_text = str(cell_data) if cell_data is not None else "N/A"
+            row_cells[c_idx].text = cell_text
+            
+            # Make header row bold
+            if r_idx == 0:
+                for run in row_cells[c_idx].paragraphs[0].runs:
+                    run.bold = True
+                    run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+                    
+    return table
 
 def generate_report(analysis_result: Dict[str, Any]) -> bytes:
-    """Generate a PDF credit report and return the bytes."""
-    buf = io.BytesIO()
-    doc = SimpleDocTemplate(
-        buf,
-        pagesize=A4,
-        topMargin=30 * mm,
-        bottomMargin=20 * mm,
-        leftMargin=25 * mm,
-        rightMargin=25 * mm,
-    )
+    """Generate a PDF CAM report and return the bytes."""
+    doc = Document()
+    
+    # ══════════════════════════════════════════════════
+    # HEADER
+    # ══════════════════════════════════════════════════
+    title = doc.add_heading('Credit Appraisal Memorandum', 0)
+    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    
+    subtitle = doc.add_paragraph('FedCredit Score — AI Financial Intelligence Engine')
+    subtitle.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    for run in subtitle.runs:
+        run.bold = True
+        run.font.color.rgb = RGBColor(0x63, 0x66, 0xf1)
+        
+    doc.add_paragraph("_" * 70).alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-    styles = getSampleStyleSheet()
-
-    # Custom styles
-    title_style = ParagraphStyle(
-        "ReportTitle",
-        parent=styles["Title"],
-        fontSize=24,
-        textColor=colors.HexColor("#1e1b4b"),
-        spaceAfter=6,
-        alignment=TA_CENTER,
-    )
-    subtitle_style = ParagraphStyle(
-        "ReportSubtitle",
-        parent=styles["Normal"],
-        fontSize=11,
-        textColor=colors.HexColor("#6366f1"),
-        alignment=TA_CENTER,
-        spaceAfter=20,
-    )
-    heading_style = ParagraphStyle(
-        "SectionHead",
-        parent=styles["Heading2"],
-        fontSize=14,
-        textColor=colors.HexColor("#312e81"),
-        spaceBefore=18,
-        spaceAfter=8,
-    )
-    body_style = ParagraphStyle(
-        "BodyText2",
-        parent=styles["Normal"],
-        fontSize=10,
-        textColor=colors.HexColor("#334155"),
-        spaceAfter=6,
-        leading=14,
-    )
-    explanation_style = ParagraphStyle(
-        "Explanation",
-        parent=styles["Normal"],
-        fontSize=9,
-        textColor=colors.HexColor("#475569"),
-        spaceAfter=4,
-        leading=13,
-        leftIndent=12,
-    )
-    body = styles["Normal"]
-
-    elements = []
-
-    # ── Header ──
-    elements.append(Paragraph("FedCredit Score", title_style))
-    elements.append(Paragraph("AI Financial Intelligence — Credit Report", subtitle_style))
-    elements.append(HRFlowable(width="100%", color=colors.HexColor("#6366f1"), thickness=1))
-    elements.append(Spacer(1, 12))
-
-    # ── Company Details ──
+    next_section_num = 1
+    
+    # ══════════════════════════════════════════════════
+    # 1. COMPANY DETAILS
+    # ══════════════════════════════════════════════════
     company = analysis_result.get("company_info", {})
-    elements.append(Paragraph("Company Details", heading_style))
-    company_data = [
+    doc.add_heading(f"{next_section_num}. Company Details", level=2)
+    next_section_num += 1
+    
+    comp_data = [
+        ["Field", "Value"],
         ["GSTIN / CIN", company.get("gstin", "N/A")],
+        ["Company Name", company.get("company_name", "N/A")],
         ["Location", company.get("location", "N/A")],
-        ["Operational Insights", company.get("insights", "N/A")],
     ]
-    t = Table(company_data, colWidths=[150, 300])
-    t.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#eef2ff")),
-        ("TEXTCOLOR", (0, 0), (-1, -1), colors.HexColor("#1e1b4b")),
-        ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
-        ("FONTSIZE", (0, 0), (-1, -1), 10),
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#c7d2fe")),
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("TOPPADDING", (0, 0), (-1, -1), 6),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-        ("LEFTPADDING", (0, 0), (-1, -1), 8),
-    ]))
-    elements.append(t)
-    elements.append(Spacer(1, 12))
+    _create_styled_table(doc, comp_data)
 
-    # ── Credit Score ──
-    scoring = analysis_result.get("scoring", {})
-    score = scoring.get("federated_score", 0)
-    risk = scoring.get("risk_category", "N/A")
+    # ══════════════════════════════════════════════════
+    # 2. EXECUTIVE SUMMARY
+    # ══════════════════════════════════════════════════
+    llm_summary = analysis_result.get("llm_executive_summary")
+    if llm_summary:
+        doc.add_heading(f"{next_section_num}. Executive Summary", level=2)
+        next_section_num += 1
+        
+        doc.add_paragraph("AI-generated executive summary based on the provided company data and financial metrics:")
+        for para in llm_summary.split("\n\n"):
+            if para.strip():
+                _add_markdown_para(doc, para.strip())
 
-    elements.append(Paragraph("Credit Score", heading_style))
+    # ══════════════════════════════════════════════════
+    # LLM CAM NARRATIVE SECTIONS (lazily generated if needed)
+    # ══════════════════════════════════════════════════
+    cam = analysis_result.get("llm_cam_sections")
+    if not cam:
+        try:
+            from backend.intelligence_layer.llm_service import generate_cam_narrative
+            cam = generate_cam_narrative(analysis_result)
+        except Exception:
+            cam = None
 
-    risk_color = "#10b981" if risk == "Low Risk" else ("#f59e0b" if risk == "Medium Risk" else "#ef4444")
-    score_html = f"""
-    <para alignment="center">
-    <font size="36" color="{risk_color}"><b>{score}</b></font>
-    <font size="14" color="#64748b"> / 1000</font><br/>
-    <font size="16" color="{risk_color}"><b>{risk}</b></font>
-    </para>
-    """
-    elements.append(Paragraph(score_html, styles["Normal"]))
-    elements.append(Spacer(1, 8))
+    if cam and isinstance(cam, dict):
+        cam_sections = [
+            ("Borrower Profile", "borrower_profile"),
+            ("Industry & Market Analysis", "industry_analysis"),
+            ("Financial Analysis — Narrative", "financial_analysis"),
+            ("Risk Assessment — Narrative", "risk_assessment"),
+            ("Credit Evaluation Framework", "credit_evaluation"),
+            ("Loan Recommendation — Assessment", "loan_recommendation"),
+            ("Final Credit Perspective", "final_credit_perspective"),
+        ]
+        for section_title, key in cam_sections:
+            text = cam.get(key)
+            if text and isinstance(text, str) and text.strip():
+                doc.add_heading(f"{next_section_num}. {section_title}", level=2)
+                next_section_num += 1
+                for para in text.split("\n\n"):
+                    if para.strip():
+                        _add_markdown_para(doc, para.strip())
 
-    # Score explanation
-    if score >= 700:
-        score_exp = f"A score of {score}/1000 indicates strong creditworthiness with low risk. Lenders can extend credit with high confidence."
-    elif score >= 400:
-        score_exp = f"A score of {score}/1000 reflects moderate creditworthiness. Standard risk provisioning and monitoring is recommended."
+    # ══════════════════════════════════════════════════
+    # OFFICER ASSESSMENT
+    # ══════════════════════════════════════════════════
+    doc.add_heading(f"{next_section_num}. Officer Assessment", level=2)
+    next_section_num += 1
+    officer_insights = company.get("insights", "") or ""
+    
+    doc.add_paragraph("The following assessment was provided by the credit officer after reviewing the company's documents, operations, and management:")
+    if officer_insights.strip():
+        p = doc.add_paragraph(f'"{officer_insights.strip()}"')
+        for run in p.runs:
+            run.italic = True
     else:
-        score_exp = f"A score of {score}/1000 signals significant credit risk. Detailed due diligence is strongly recommended."
-    elements.append(Paragraph(score_exp, explanation_style))
-    elements.append(Spacer(1, 12))
+        doc.add_paragraph("No officer insights were provided.")
 
-    # ── 5Cs of Credit Analysis ──
+    # ══════════════════════════════════════════════════
+    # FEDERATED CREDIT SCORE
+    # ══════════════════════════════════════════════════
+    scoring = analysis_result.get("scoring", {})
+    final_score = scoring.get("federated_score", 0)
+    original_score = scoring.get("original_score", final_score)
+    insight_adj = scoring.get("insight_adjustment", 0)
+    risk = scoring.get("risk_category", "N/A")
+    
+    doc.add_heading(f"{next_section_num}. Federated Credit Score", level=2)
+    next_section_num += 1
+    
+    score_p = doc.add_paragraph()
+    score_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    s_run1 = score_p.add_run(f"{final_score} / 1000\n")
+    s_run1.bold = True
+    s_run1.font.size = Pt(24)
+    s_run2 = score_p.add_run(risk)
+    s_run2.bold = True
+    s_run2.font.size = Pt(14)
+
+    doc.add_heading("Score Impact of Officer Assessment", level=3)
+    score_data = [
+        ["Metric", "Value"],
+        ["Score Before Officer Review", str(original_score)],
+        ["Officer Insight Adjustment", f"{'+' if insight_adj >= 0 else ''}{insight_adj} points"],
+        ["Final Federated Score", str(final_score)],
+        ["Risk Category", risk]
+    ]
+    _create_styled_table(doc, score_data)
+    
+    if insight_adj != 0:
+        dir_word = "increased" if insight_adj > 0 else "decreased"
+        doc.add_paragraph(f"The officer's assessment {dir_word} the federated score by {abs(insight_adj)} points.")
+        
+    doc.add_paragraph(
+        f"A score of {final_score}/1000 indicates {'strong creditworthiness' if final_score >= 700 else 'moderate risk' if final_score >= 400 else 'significant risk'}."
+    )
+
+    # ══════════════════════════════════════════════════
+    # 5Cs OF CREDIT ANALYSIS
+    # ══════════════════════════════════════════════════
     five_cs = scoring.get("five_cs", [])
     if five_cs:
-        elements.append(Paragraph("5Cs of Credit Analysis", heading_style))
-        elements.append(Paragraph(
-            "The 5Cs framework provides a comprehensive assessment of creditworthiness across "
-            "five critical dimensions: Character, Capacity, Capital, Collateral, and Conditions.",
-            body_style,
-        ))
-        elements.append(Spacer(1, 8))
-
+        doc.add_heading(f"{next_section_num}. 5Cs of Credit Analysis", level=2)
+        next_section_num += 1
         for c in five_cs:
-            name = c.get("name", "")
-            c_score = c.get("score", 0)
-            c_color = c.get("color", "#6366f1")
-
-            # Section header
-            c_heading = ParagraphStyle(
-                f"C_{name}",
-                parent=styles["Heading3"],
-                fontSize=12,
-                textColor=colors.HexColor(c_color),
-                spaceBefore=10,
-                spaceAfter=4,
-            )
-            elements.append(Paragraph(f"{c.get('icon', '')} {name} — Score: {c_score}/100", c_heading))
-            elements.append(Paragraph(c.get("description", ""), explanation_style))
-            elements.append(Spacer(1, 4))
-
-            # Explanation
-            elements.append(Paragraph(c.get("explanation", ""), body_style))
-
-            # Factors
+            doc.add_heading(f"{c.get('name', 'N/A')} — Score: {c.get('score', 0)}/100", level=3)
+            doc.add_paragraph(f"{c.get('description', '')}")
+            _add_markdown_para(doc, c.get("explanation", ""))
+            
             factors = c.get("factors", [])
             for f in factors:
-                elements.append(Paragraph(f"• {f}", explanation_style))
+                doc.add_paragraph(f"• {f}")
 
-            elements.append(Spacer(1, 6))
-
-    # ── Risk Narrative ──
+    # ══════════════════════════════════════════════════
+    # RISK SUMMARY NARRATIVE
+    # ══════════════════════════════════════════════════
     risk_narrative = scoring.get("risk_narrative", "")
     if risk_narrative:
-        elements.append(Paragraph("Risk Assessment Summary", heading_style))
-        # Replace markdown bold markers
-        risk_narrative = risk_narrative.replace("**", "<b>").replace("**", "</b>")
-        elements.append(Paragraph(risk_narrative, body_style))
-        elements.append(Spacer(1, 12))
+        doc.add_heading(f"{next_section_num}. Risk Assessment Summary", level=2)
+        next_section_num += 1
+        
+        for para in risk_narrative.split("\n\n"):
+            para = para.strip()
+            if not para:
+                continue
+            if ":" in para and para.split(":")[0].isupper():
+                header_part, _, body_part = para.partition(":")
+                doc.add_heading(header_part.strip(), level=3)
+                if body_part.strip():
+                    _add_markdown_para(doc, body_part.strip())
+            else:
+                _add_markdown_para(doc, para)
 
-    # ── Bank Scores ──
+    # ══════════════════════════════════════════════════
+    # BANK ASSESSMENTS
+    # ══════════════════════════════════════════════════
     bank_scores = scoring.get("bank_scores", [])
     if bank_scores:
-        elements.append(Paragraph("Individual Bank Assessments", heading_style))
+        doc.add_heading(f"{next_section_num}. Individual Bank Assessments", level=2)
+        next_section_num += 1
+        
         bank_data = [["Bank", "Focus Area", "Score"]]
         for b in bank_scores:
-            bank_data.append([b["bank_name"], b["focus"], str(b["score"])])
+            bank_data.append([b.get("bank_name", ""), b.get("focus", ""), str(b.get("score", 0))])
+        _create_styled_table(doc, bank_data)
+        
+        bank_summary = scoring.get("bank_summary", "")
+        if bank_summary:
+            doc.add_heading("Bank Assessment Summary", level=3)
+            _add_markdown_para(doc, bank_summary)
 
-        bt = Table(bank_data, colWidths=[160, 160, 80])
-        bt.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#6366f1")),
-            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-            ("FONTSIZE", (0, 0), (-1, -1), 10),
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#c7d2fe")),
-            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f5f3ff")]),
-            ("TOPPADDING", (0, 0), (-1, -1), 6),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-        ]))
-        elements.append(bt)
-        elements.append(Spacer(1, 12))
-
-    # ── Risk Breakdown Chart ──
-    breakdown = scoring.get("risk_breakdown", {})
-    if breakdown:
-        elements.append(Paragraph("Risk Factor Breakdown", heading_style))
-        elements.append(_build_pie_chart(breakdown))
-        elements.append(Spacer(1, 8))
-
-        bd_data = [["Factor", "Contribution %"]]
-        for k, v in breakdown.items():
-            bd_data.append([k, f"{v}%"])
-        bdt = Table(bd_data, colWidths=[200, 120])
-        bdt.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#6366f1")),
-            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-            ("FONTSIZE", (0, 0), (-1, -1), 10),
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#c7d2fe")),
-            ("TOPPADDING", (0, 0), (-1, -1), 5),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-        ]))
-        elements.append(bdt)
-        elements.append(Spacer(1, 12))
-
-    # ── Financial Metrics ──
+    # ══════════════════════════════════════════════════
+    # END-OF-REPORT SECTIONS
+    # ══════════════════════════════════════════════════
+    
+    # Financial Metrics
     fin = analysis_result.get("financial_data", {})
     if fin:
-        elements.append(Paragraph("Extracted Financial Metrics", heading_style))
+        doc.add_heading(f"{next_section_num}. Extracted Financial Metrics", level=2)
+        next_section_num += 1
         fin_rows = [["Metric", "Value"]]
         for key in ["turnover", "debt_ratio", "profit_margin", "capacity_utilization", "total_assets", "total_liabilities"]:
             if key in fin:
                 label = key.replace("_", " ").title()
-                val = fin[key]
-                if key == "turnover":
-                    val = f"₹{val:,.0f}" if isinstance(val, (int, float)) else str(val)
-                elif key in ("debt_ratio", "profit_margin"):
-                    val = f"{val:.2f}" if isinstance(val, (int, float)) else str(val)
-                else:
-                    val = str(val)
-                fin_rows.append([label, val])
-
+                fin_rows.append([label, str(fin[key])])
         if len(fin_rows) > 1:
-            ft = Table(fin_rows, colWidths=[200, 200])
-            ft.setStyle(TableStyle([
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#6366f1")),
-                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                ("FONTSIZE", (0, 0), (-1, -1), 10),
-                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#c7d2fe")),
-                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f5f3ff")]),
-                ("TOPPADDING", (0, 0), (-1, -1), 5),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-            ]))
-            elements.append(ft)
-            elements.append(Spacer(1, 12))
+            _create_styled_table(doc, fin_rows)
 
-    # ── Intelligence Signals ──
+    # Intelligence Signals
     intel = analysis_result.get("intelligence", {})
     if intel:
-        elements.append(Paragraph("External Intelligence Signals", heading_style))
-        intel_rows = [["Signal", "Value", "Interpretation"]]
-        
-        ns = intel.get("news_sentiment", "N/A")
-        ns_interp = "Positive" if isinstance(ns, (int, float)) and ns >= 5 else ("Neutral" if isinstance(ns, (int, float)) and ns >= 0 else "Negative")
-        intel_rows.append(["News Sentiment", f"{ns} / 10", ns_interp])
-        
-        mca = intel.get("mca_compliance", "N/A")
-        mca_interp = "Strong" if isinstance(mca, (int, float)) and mca >= 7 else ("Moderate" if isinstance(mca, (int, float)) and mca >= 4 else "Weak")
-        intel_rows.append(["MCA Compliance", f"{mca} / 10", mca_interp])
-        
-        cc = intel.get("court_cases", "N/A")
-        cc_interp = "Clean record" if cc == 0 else f"{cc} case(s) — risk"
-        intel_rows.append(["Court Cases", str(cc), cc_interp])
-        
-        ndvi = intel.get("ndvi_activity", "N/A")
-        ndvi_interp = "High activity" if isinstance(ndvi, (int, float)) and ndvi >= 0.7 else ("Moderate" if isinstance(ndvi, (int, float)) and ndvi >= 0.4 else "Low activity")
-        intel_rows.append(["NDVI Activity", str(ndvi), ndvi_interp])
+        doc.add_heading(f"{next_section_num}. External Intelligence Signals", level=2)
+        next_section_num += 1
+        intel_rows = [["Signal", "Value"]]
+        intel_rows.append(["News Sentiment", f"{intel.get('news_sentiment', 'N/A')} / 10"])
+        intel_rows.append(["MCA Compliance", f"{intel.get('mca_compliance', 'N/A')} / 10"])
+        intel_rows.append(["Court Cases", str(intel.get('court_cases', 'N/A'))])
+        intel_rows.append(["NDVI Activity", str(intel.get('ndvi_activity', 'N/A'))])
+        _create_styled_table(doc, intel_rows)
 
-        it = Table(intel_rows, colWidths=[130, 100, 170])
-        it.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#6366f1")),
-            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-            ("FONTSIZE", (0, 0), (-1, -1), 10),
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#c7d2fe")),
-            ("TOPPADDING", (0, 0), (-1, -1), 5),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-        ]))
-        elements.append(it)
-        elements.append(Spacer(1, 12))
-
-    # ── Loan Recommendation ──
+    # Loan Recommendation
     loan = scoring.get("loan_recommendation", {})
     if loan:
-        elements.append(Paragraph("Loan Recommendation", heading_style))
+        doc.add_heading(f"{next_section_num}. Loan Recommendation", level=2)
+        next_section_num += 1
         loan_rows = [["Parameter", "Value"]]
-        loan_rows.append(["Recommended Loan Amount", loan.get("recommended_loan", "N/A")])
+        loan_rows.append(["Recommended Loan", loan.get("recommended_loan", "N/A")])
         loan_rows.append(["Interest Rate", loan.get("interest_rate", "N/A")])
         loan_rows.append(["Tenure", loan.get("tenure", "N/A")])
-        loan_rows.append(["Approval Likelihood", loan.get("approval_likelihood", "N/A")])
+        loan_rows.append(["Likelihood", loan.get("approval_likelihood", "N/A")])
+        _create_styled_table(doc, loan_rows)
+        _add_markdown_para(doc, loan.get("explanation", ""))
 
-        lt = Table(loan_rows, colWidths=[200, 200])
-        lt.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#10b981")),
-            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-            ("FONTSIZE", (0, 0), (-1, -1), 10),
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#a7f3d0")),
-            ("TOPPADDING", (0, 0), (-1, -1), 5),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-        ]))
-        elements.append(lt)
-        elements.append(Spacer(1, 6))
+    # Enhanced Financial Ratios
+    fr = scoring.get("financial_ratios", {})
+    if fr:
+        doc.add_heading(f"{next_section_num}. Enhanced Financial Ratios", level=2)
+        next_section_num += 1
+        r_rows = [["Metric", "Value", "Assessment"]]
+        for key in ["debt_ebitda", "dscr", "net_profit_margin", "debt_equity"]:
+            r = fr.get(key, {})
+            if isinstance(r, dict) and "value" in r:
+                r_rows.append([key.replace("_", " ").title(), str(r.get("value", "N/A")), str(r.get("assessment", "N/A"))])
+        if len(r_rows) > 1:
+            _create_styled_table(doc, r_rows)
 
-        loan_exp = loan.get("explanation", "")
-        if loan_exp:
-            elements.append(Paragraph(loan_exp, explanation_style))
-        elements.append(Spacer(1, 20))
+    # Detailed Risk Assessment
+    dr = scoring.get("detailed_risk_assessment", [])
+    if dr:
+        doc.add_heading(f"{next_section_num}. Detailed Risk Assessment", level=2)
+        next_section_num += 1
+        dr_rows = [["Category", "Severity", "Description"]]
+        for r in dr:
+            dr_rows.append([r.get("category", ""), r.get("severity", ""), str(r.get("description", ""))[:150]])
+        _create_styled_table(doc, dr_rows)
+        for r in dr:
+            if r.get("severity") in ["Medium", "High"] and r.get("mitigation"):
+                doc.add_paragraph(f"• Mitigation ({r['category']}): {r['mitigation']}")
 
-    # ── Footer ──
-    elements.append(HRFlowable(width="100%", color=colors.HexColor("#6366f1"), thickness=0.5))
-    elements.append(Spacer(1, 6))
-    footer_style = ParagraphStyle(
-        "Footer", parent=styles["Normal"], fontSize=8,
-        textColor=colors.HexColor("#94a3b8"), alignment=TA_CENTER,
-    )
-    elements.append(Paragraph(
-        "Generated by FedCredit Score — AI Financial Intelligence Engine  |  "
-        "This report is for informational purposes only.",
-        footer_style,
-    ))
+    # Conclusion
+    doc.add_heading(f"{next_section_num}. Conclusion", level=2)
+    next_section_num += 1
+    doc.add_paragraph(f"Based on the comprehensive credit appraisal, the company receives a federated score of {final_score}/1000 ({risk}).")
 
-    doc.build(elements)
-    return buf.getvalue()
+    # Footer
+    doc.add_paragraph("_" * 70).alignment = WD_ALIGN_PARAGRAPH.CENTER
+    footer = doc.add_paragraph("Generated by FedCredit Score — AI Financial Intelligence Engine")
+    footer.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    
+    # ══════════════════════════════════════════════════
+    # DOCX TO PDF CONVERSION
+    # ══════════════════════════════════════════════════
+    try:
+        from docx2pdf import convert
+        
+        # We need absolute file paths
+        temp_dir = tempfile.gettempdir()
+        base_name = str(uuid.uuid4())
+        
+        docx_path = os.path.join(temp_dir, f"{base_name}.docx")
+        pdf_path = os.path.join(temp_dir, f"{base_name}.pdf")
+        
+        # Save DOCX
+        doc.save(docx_path)
+        
+        try:
+            # Convert DOCX to PDF using COM object (requires Word on Windows)
+            convert(docx_path, pdf_path)
+            
+            # Read back as bytes
+            with open(pdf_path, 'rb') as f:
+                pdf_bytes = f.read()
+                
+            return pdf_bytes
+            
+        finally:
+            # Cleanup temp files
+            if os.path.exists(docx_path):
+                os.remove(docx_path)
+            if os.path.exists(pdf_path):
+                os.remove(pdf_path)
+                
+    except ImportError:
+        logger.error("docx2pdf is not installed.")
+        raise RuntimeError("docx2pdf package is required for PDF generation.")
+    except Exception as e:
+        logger.error(f"Failed to generate PDF from DOCX: {e}")
+        # If Word isn't installed or conversion fails, we could return DOCX bytes as a fallback
+        # by saving into BytesIO, but to match the previous requirement we raise an error.
+        raise RuntimeError(f"PDF generation failed: {e}")

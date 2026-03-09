@@ -13,6 +13,10 @@ from fastapi.responses import FileResponse
 
 from backend.routes.upload import router as upload_router
 from backend.routes.analysis import router as analysis_router
+from backend.routes.history import router as history_router
+
+# Initialize database tables
+import backend.database
 
 app = FastAPI(
     title="FedCredit Score",
@@ -30,6 +34,7 @@ app.add_middleware(
 )
 
 # Register API routers
+app.include_router(history_router)
 app.include_router(upload_router)
 app.include_router(analysis_router)
 
@@ -44,7 +49,13 @@ for subdir in ("css", "js", "assets"):
 
 
 @app.get("/")
-async def serve_index():
+async def serve_landing():
+    # Start directly on the document upload page
+    return FileResponse(str(FRONTEND_DIR / "index.html"))
+
+
+@app.get("/upload")
+async def serve_upload():
     return FileResponse(str(FRONTEND_DIR / "index.html"))
 
 

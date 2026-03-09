@@ -60,10 +60,55 @@ def _extract_financial_values(text: str) -> Dict[str, Any]:
     if m:
         data["capacity_utilization"] = f"{m.group(1)}%"
 
+    # Total assets
+    m = re.search(
+        r"(?:total\s*assets)[\s:₹$]*?([\d,]+(?:\.\d+)?)", text, re.IGNORECASE
+    )
+    if m:
+        data["total_assets"] = float(m.group(1).replace(",", ""))
+
+    # Total liabilities
+    m = re.search(
+        r"(?:total\s*liabilities)[\s:₹$]*?([\d,]+(?:\.\d+)?)", text, re.IGNORECASE
+    )
+    if m:
+        data["total_liabilities"] = float(m.group(1).replace(",", ""))
+
     # Audit notes (grab first sentence that mentions audit)
     m = re.search(r"([^.]*audit[^.]*\.)", text, re.IGNORECASE)
     if m:
         data["audit_notes"] = m.group(1).strip()
+
+    # ── Auto-extract GSTIN ──
+    gstin_match = re.search(
+        r'\b(\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z])\b', text
+    )
+    if gstin_match:
+        data["gstin_extracted"] = gstin_match.group(1)
+
+    # ── Auto-extract Company Name ──
+    for pattern in [
+        r"(?:company\s*name|firm\s*name|business\s*name|name\s*of\s*(?:the\s*)?company|entity\s*name)[\s:]+([A-Z][A-Za-z\s&.,\-()]+?)(?:\n|$|(?:\s{2,}))",
+        r"M/s\.?\s+([A-Z][A-Za-z\s&.,\-()]+?)(?:\n|$)",
+    ]:
+        m = re.search(pattern, text, re.IGNORECASE)
+        if m:
+            name = m.group(1).strip().rstrip(".,")
+            if len(name) > 2:
+                data["company_name_extracted"] = name
+                break
+
+    # ── Auto-extract Address ──
+    for pattern in [
+        r"(?:registered\s*(?:office|address)|business\s*address|address|location)[\s:]+(.+?)(?:\n\n|\n(?=[A-Z]))",
+        r"(?:registered\s*(?:office|address)|business\s*address|address)[\s:]+(.+?)(?:\n|$)",
+    ]:
+        m = re.search(pattern, text, re.IGNORECASE | re.DOTALL)
+        if m:
+            addr = m.group(1).strip().replace("\n", ", ").rstrip(".,")
+            if len(addr) > 5:
+                data["address_extracted"] = addr
+                break
 
     return data
 

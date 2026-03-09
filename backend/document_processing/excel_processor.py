@@ -77,6 +77,46 @@ def process_excel(file_path: str) -> Dict[str, Any]:
         except Exception:
             continue
 
+    # Extract GSTIN, company name, address from all cell content
+    gstin_pattern = re.compile(r'\b(\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z])\b')
+    company_keywords = ["company name", "firm name", "business name", "entity name"]
+    address_keywords = ["address", "registered office", "business location", "location"]
+
+    for sheet_name in xls.sheet_names:
+        try:
+            df = pd.read_excel(xls, sheet_name=sheet_name, header=None)
+            for idx, row in df.iterrows():
+                row_str = " ".join(str(v) for v in row.values)
+
+                if "gstin_extracted" not in all_data:
+                    m = gstin_pattern.search(row_str)
+                    if m:
+                        all_data["gstin_extracted"] = m.group(1)
+
+                if "company_name_extracted" not in all_data:
+                    row_lower = row_str.lower()
+                    for kw in company_keywords:
+                        if kw in row_lower:
+                            for v in row.values:
+                                v_str = str(v).strip()
+                                if v_str and v_str.lower() != kw and len(v_str) > 2:
+                                    all_data["company_name_extracted"] = v_str
+                                    break
+                            break
+
+                if "address_extracted" not in all_data:
+                    row_lower = row_str.lower()
+                    for kw in address_keywords:
+                        if kw in row_lower:
+                            for v in row.values:
+                                v_str = str(v).strip()
+                                if v_str and v_str.lower() != kw and len(v_str) > 5:
+                                    all_data["address_extracted"] = v_str
+                                    break
+                            break
+        except Exception:
+            continue
+
     all_data["tables"] = raw_tables[:5]
     all_data["source"] = "excel"
     return all_data

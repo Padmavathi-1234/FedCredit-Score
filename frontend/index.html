@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>FedCredit Score — AI Financial Intelligence Engine</title>
+  <title>Upload — FedCredit Score</title>
   <meta name="description"
     content="Upload financial documents and receive a federated AI-powered credit score with risk analysis and loan recommendations." />
 
@@ -29,6 +29,7 @@
   <div class="main-content" x-data="uploadApp">
 
     <!-- ── Header ── -->
+    <a href="/" class="back-link">← Back to Home</a>
     <div class="logo-icon">🏦</div>
     <h1 class="title-main">FedCredit Score</h1>
     <p class="subtitle">AI Financial Intelligence Engine — Federated Credit Scoring</p>
@@ -49,9 +50,12 @@
           <span class="file-type-badge">PDF</span>
           <span class="file-type-badge">DOC / DOCX</span>
           <span class="file-type-badge">XLSX</span>
+          <span class="file-type-badge">CSV</span>
+          <span class="file-type-badge">JPG / PNG</span>
         </div>
-        <input type="file" x-ref="fileInput" @change="onFileSelect($event)" multiple accept=".pdf,.doc,.docx,.xls,.xlsx"
-          style="display:none" id="file-input" />
+        <input type="file" x-ref="fileInput" @change="onFileSelect($event)" multiple
+          accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.jpg,.jpeg,.png,.tiff,.tif,.bmp" style="display:none"
+          id="file-input" />
       </div>
 
       <!-- File List -->
@@ -67,20 +71,35 @@
 
       <!-- ── Company Info ── -->
       <div class="form-group">
-        <label class="form-label" for="gstin-input">GSTIN / CIN</label>
-        <input type="text" class="form-input" id="gstin-input" placeholder="e.g. 29ABCDE1234F1Z5" x-model="gstin" />
+        <label class="form-label" for="gstin-input">
+          GSTIN / CIN
+          <span class="auto-badge" x-show="autoPopulated.gstin" x-transition>✓ Auto-detected</span>
+        </label>
+        <input type="text" class="form-input" :class="{ 'input-error': fieldErrors.gstin }" id="gstin-input"
+          placeholder="e.g. 29ABCDE1234F1Z5" x-model="gstin" />
+        <span class="field-error" x-show="fieldErrors.gstin" x-text="fieldErrors.gstin"></span>
       </div>
 
       <div class="form-group">
-        <label class="form-label" for="location-input">Company Location</label>
-        <input type="text" class="form-input" id="location-input" placeholder="e.g. Bangalore, Karnataka"
-          x-model="location" />
+        <label class="form-label" for="location-input">
+          Company Location
+          <span class="auto-badge" x-show="autoPopulated.location" x-transition>✓ Auto-detected</span>
+        </label>
+        <input type="text" class="form-input" :class="{ 'input-error': fieldErrors.location }" id="location-input"
+          placeholder="e.g. Bangalore, Karnataka" x-model="location" />
+        <span class="field-error" x-show="fieldErrors.location" x-text="fieldErrors.location"></span>
       </div>
 
       <div class="form-group">
-        <label class="form-label" for="insights-input">Operational Insights (optional)</label>
-        <textarea class="form-textarea" id="insights-input"
-          placeholder="e.g. 80% capacity utilization, expanding to 3 new states" x-model="insights"></textarea>
+        <label class="form-label" for="insights-input">
+          Officer Insights <span style="color: #ef4444; font-weight: 600;">*</span>
+        </label>
+        <textarea class="form-textarea" :class="{ 'input-error': fieldErrors.insights }" id="insights-input"
+          placeholder="Provide your assessment: e.g. Company operations are stable with 80% capacity utilization, expanding to 3 new states. Management appears competent and responsive."
+          x-model="insights" rows="4"></textarea>
+        <span class="field-error" x-show="fieldErrors.insights" x-text="fieldErrors.insights"></span>
+        <p style="color: var(--text-muted); font-size: 0.78rem; margin-top: 4px;">Your insights will directly influence
+          the federated credit score. This is a mandatory field.</p>
       </div>
 
       <!-- ── Analyze Button ── -->
@@ -100,6 +119,27 @@
               'done': i < processingStep,
             }" x-text="step"></div>
         </template>
+      </div>
+    </div>
+
+    <!-- ── Error Modal ── -->
+    <div class="error-modal-overlay" x-show="showErrorModal" x-transition.opacity @click.self="showErrorModal = false">
+      <div class="error-modal glass-card" x-show="showErrorModal" x-transition.scale>
+        <div class="error-modal-header">
+          <span class="error-modal-icon" x-text="errorModalIcon"></span>
+          <h3 class="error-modal-title" x-text="errorModalTitle"></h3>
+        </div>
+        <div class="error-modal-body">
+          <template x-for="(err, i) in errorModalMessages" :key="i">
+            <div class="error-modal-message">
+              <span class="error-bullet">⚠</span>
+              <span x-text="err"></span>
+            </div>
+          </template>
+        </div>
+        <div class="error-modal-footer">
+          <button class="btn-secondary" @click="showErrorModal = false">Close & Fix</button>
+        </div>
       </div>
     </div>
 

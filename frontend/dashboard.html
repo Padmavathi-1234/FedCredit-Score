@@ -22,256 +22,383 @@
 
     <!-- Three.js -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+
+    <!-- Marked.js for Markdown parsing -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 
 <body>
     <!-- Three.js Background -->
     <canvas id="three-canvas"></canvas>
 
-    <!-- Dashboard -->
-    <div class="main-content" x-data="dashboardApp">
+    <!-- Dashboard container -->
+    <div class="flex h-screen overflow-hidden relative z-10" x-data="dashboardApp">
 
-        <!-- Back link -->
-        <a href="/" class="back-link">← New Analysis</a>
-
-        <!-- Header -->
-        <div class="logo-icon">🏦</div>
-        <h1 class="title-main">Credit Analysis Results</h1>
-        <p class="subtitle"
-            x-text="result?.company_info?.gstin ? 'GSTIN: ' + result.company_info.gstin + (result?.company_info?.location ? ' | ' + result.company_info.location : '') : 'FedCredit Score Dashboard'">
-        </p>
-
-        <!-- Dashboard Grid -->
-        <div class="dashboard-grid">
-
-            <!-- ═══════════════════════════════════════════ -->
-            <!-- ROW 1: Score + Chart + Loan                -->
-            <!-- ═══════════════════════════════════════════ -->
-
-            <!-- ── Credit Score Card ── -->
-            <div class="glass-card score-card" id="score-card">
-                <p class="section-label">Federated Credit Score</p>
-                <div class="score-value" :class="scoreClass">
-                    <span x-text="displayScore"></span><span class="score-max"> / 1000</span>
-                </div>
-                <span class="risk-badge" :class="riskClass" x-text="riskCategory"></span>
-                <div class="risk-explanation-box" style="margin-top:20px">
-                    <div class="risk-explanation-title">📋 What does this mean?</div>
-                    <div class="risk-explanation-text" x-text="getRiskExplanation()"></div>
-                </div>
+        <!-- ── Sidebar (History) ── -->
+        <div class="w-72 bg-slate-900/90 backdrop-blur-md border-r border-slate-800 flex flex-col flex-shrink-0">
+            <!-- New Analysis -->
+            <div class="p-4 border-b border-slate-800">
+                <a href="/"
+                    class="flex items-center justify-center gap-2 w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold transition-colors duration-200">
+                    <span class="text-xl">+</span> New Analysis
+                </a>
             </div>
 
-            <!-- ── Risk Breakdown Chart ── -->
-            <div class="glass-card" id="chart-card">
-                <p class="section-label">Risk Factor Breakdown</p>
-                <div class="chart-container">
-                    <canvas id="riskChart"></canvas>
-                </div>
-                <div class="risk-explanation-box">
-                    <div class="risk-explanation-title">📊 How is this calculated?</div>
-                    <div class="risk-explanation-text">
-                        The risk breakdown shows the relative contribution of each intelligence factor to the overall
-                        assessment.
-                        Higher percentages indicate factors with greater influence on the final score. The federated
-                        model weighs
-                        financial data (40%), compliance & legal signals (30%), and market & satellite intelligence
-                        (30%).
-                    </div>
-                </div>
+            <!-- History List -->
+            <div class="flex-1 overflow-y-auto p-3 space-y-1 custom-scrollbar">
+                <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3 px-2 mt-2">History</div>
+
+                <!-- Loading State -->
+                <div x-show="loadingHistory" class="text-sm text-slate-500 px-2 italic">Loading history...</div>
+
+                <!-- Empty State -->
+                <div x-show="!loadingHistory && history.length === 0" class="text-sm text-slate-500 px-2 italic">No
+                    previous analyses.</div>
+
+                <!-- List items -->
+                <template x-for="session in history" :key="session.id">
+                    <button @click="loadSession(session.id)"
+                        class="w-full text-left p-3 rounded-xl hover:bg-slate-800/80 transition-colors flex items-center justify-between group"
+                        :class="{'bg-slate-800 border border-indigo-500/30': currentSessionId === session.id}">
+                        <div class="truncate">
+                            <div class="font-medium text-sm text-slate-200 truncate"
+                                x-text="session.company_name || 'Unnamed Company'"></div>
+                            <div class="text-xs text-slate-500 mt-1" x-text="formatDate(session.last_updated)"></div>
+                        </div>
+                        <!-- Delete Button (visible on hover) -->
+                        <div @click.stop="deleteSession(session.id)"
+                            class="hidden group-hover:flex w-6 h-6 items-center justify-center rounded hover:bg-red-500/20 text-red-400 transition-colors">
+                            ×
+                        </div>
+                    </button>
+                </template>
             </div>
 
-            <!-- ── Loan Recommendation ── -->
-            <div class="glass-card loan-card" id="loan-card">
-                <p class="section-label">Loan Recommendation</p>
-                <div class="loan-amount" x-text="loan.recommended_loan || 'N/A'"></div>
-                <div class="metrics-list" style="width:100%">
-                    <div class="loan-detail">
-                        <span class="label">Interest Rate</span>
-                        <span class="value" x-text="loan.interest_rate || 'N/A'"></span>
-                    </div>
-                    <div class="loan-detail">
-                        <span class="label">Tenure</span>
-                        <span class="value" x-text="loan.tenure || 'N/A'"></span>
-                    </div>
-                    <div class="loan-detail">
-                        <span class="label">Approval Likelihood</span>
-                        <span class="value" x-text="loan.approval_likelihood || 'N/A'"></span>
-                    </div>
+
+        </div>
+
+        <!-- ── Main Content Area ── -->
+        <div class="flex-1 overflow-y-auto custom-scrollbar relative">
+            <div class="p-8 max-w-7xl mx-auto flex flex-col items-center">
+
+                <!-- Welcome / Empty State -->
+                <div x-show="!result && !loadingAnalysis"
+                    class="flex flex-col items-center justify-center h-full mt-32 text-center" x-cloak>
+                    <div class="logo-icon text-6xl mb-6 opacity-80">🏦</div>
+                    <h2 class="text-3xl font-bold text-slate-100 mb-4">FedCredit Analysis</h2>
+                    <p class="text-slate-400 max-w-md">Select a previous analysis from the history sidebar, or start a
+                        new one.</p>
                 </div>
-                <div class="risk-explanation-box">
-                    <div class="risk-explanation-title">💡 Recommendation Rationale</div>
-                    <div class="risk-explanation-text"
-                        x-text="loan.explanation || 'Based on the overall credit assessment.'"></div>
+
+                <!-- Loading State -->
+                <div x-show="loadingAnalysis" class="flex flex-col items-center justify-center h-full mt-32 text-center"
+                    x-cloak>
+                    <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-500 mb-4"></div>
+                    <p class="text-slate-400">Loading analysis data...</p>
                 </div>
-            </div>
 
-            <!-- ═══════════════════════════════════════════ -->
-            <!-- ROW 2: 5Cs of Credit Analysis (FULL WIDTH) -->
-            <!-- ═══════════════════════════════════════════ -->
+                <!-- Active Dashboard -->
+                <div x-show="result && !loadingAnalysis" class="w-full flex flex-col items-center transition-opacity"
+                    x-cloak>
+                    <!-- Header -->
+                    <div class="logo-icon mb-2">🏦</div>
+                    <h1 class="title-main">Credit Analysis Results</h1>
+                    <p class="subtitle"
+                        x-text="result?.company_info?.gstin ? 'GSTIN: ' + result.company_info.gstin + (result?.company_info?.location ? ' | ' + result.company_info.location : '') : 'FedCredit Score Dashboard'">
+                    </p>
 
-            <div class="glass-card dashboard-full" id="five-cs-card">
-                <p class="section-label">5Cs of Credit Analysis</p>
-                <p class="section-title">Comprehensive Creditworthiness Assessment</p>
-                <p style="color: var(--text-secondary); font-size: 0.88rem; margin-bottom: 16px;">
-                    The 5Cs framework is the gold standard for credit evaluation, providing a holistic view
-                    of a borrower's creditworthiness across five critical dimensions.
-                </p>
+                    <!-- Dashboard Grid -->
+                    <div class="dashboard-grid">
 
-                <div class="five-cs-grid">
-                    <template x-for="c in fiveCs" :key="c.name">
-                        <div class="five-c-item">
-                            <div class="five-c-header">
-                                <div class="five-c-name">
-                                    <div class="five-c-icon" :style="'background:' + c.color + '22; color:' + c.color"
-                                        x-text="c.icon"></div>
-                                    <div>
-                                        <div class="five-c-title" x-text="c.name"></div>
-                                        <div style="font-size:0.78rem; color:var(--text-muted)" x-text="c.description">
+                        <!-- ═══════════════════════════════════════════ -->
+                        <!-- ROW 1: Score + Chart + Loan                -->
+                        <!-- ═══════════════════════════════════════════ -->
+
+                        <!-- ── Credit Score Card ── -->
+                        <div class="glass-card score-card" id="score-card">
+                            <p class="section-label">Federated Credit Score</p>
+                            <div class="score-value" :class="scoreClass">
+                                <span x-text="displayScore"></span><span class="score-max"> / 1000</span>
+                            </div>
+                            <span class="risk-badge" :class="riskClass" x-text="riskCategory"></span>
+
+                            <!-- Before / After Officer Review -->
+                            <div
+                                style="margin-top: 18px; padding: 14px; background: rgba(99,102,241,0.06); border-radius: 12px; border: 1px solid rgba(99,102,241,0.15);">
+                                <div
+                                    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                    <div style="text-align: center; flex: 1;">
+                                        <div
+                                            style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">
+                                            Before Officer Review</div>
+                                        <div style="font-size: 1.5rem; font-weight: 700; color: #94a3b8;"
+                                            x-text="originalScore">
+                                        </div>
+                                    </div>
+                                    <div style="font-size: 1.2rem; color: var(--text-muted); padding: 0 12px;">→</div>
+                                    <div style="text-align: center; flex: 1;">
+                                        <div
+                                            style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">
+                                            After Officer Review</div>
+                                        <div style="font-size: 1.5rem; font-weight: 700;"
+                                            :style="'color:' + (insightAdjustment >= 0 ? '#10b981' : '#ef4444')"
+                                            x-text="score">
                                         </div>
                                     </div>
                                 </div>
-                                <div class="five-c-score" :style="'color:' + c.color" x-text="c.score + '/100'"></div>
-                            </div>
-                            <div class="five-c-bar">
-                                <div class="five-c-bar-fill" :style="'width:' + c.score + '%; background:' + c.color">
+                                <div
+                                    style="text-align: center; font-size: 0.82rem; padding-top: 6px; border-top: 1px solid rgba(99,102,241,0.1);">
+                                    <span
+                                        :style="'color:' + (insightAdjustment >= 0 ? '#10b981' : '#ef4444'); font-weight: 600;">
+                                        <span
+                                            x-text="insightAdjustment >= 0 ? '▲ +' + insightAdjustment : '▼ ' + insightAdjustment"></span>
+                                        points
+                                    </span>
+                                    <span style="color: var(--text-muted);"> from officer insights</span>
                                 </div>
                             </div>
-                            <div class="five-c-explanation" x-text="c.explanation"></div>
-                            <div class="five-c-factors">
-                                <template x-for="f in c.factors" :key="f">
-                                    <div class="five-c-factor" x-text="f"></div>
+
+                            <div class="risk-explanation-box" style="margin-top:16px">
+                                <div class="risk-explanation-title">📋 What does this mean?</div>
+                                <div class="risk-explanation-text" x-html="getRiskExplanation()"></div>
+                            </div>
+                        </div>
+
+                        <!-- ── Risk Breakdown Chart ── -->
+                        <div class="glass-card" id="chart-card">
+                            <p class="section-label">Risk Factor Breakdown</p>
+                            <div class="chart-container">
+                                <canvas id="riskChart"></canvas>
+                            </div>
+                            <div class="risk-explanation-box">
+                                <div class="risk-explanation-title">📊 How is this calculated?</div>
+                                <div class="risk-explanation-text">
+                                    The risk breakdown shows the relative contribution of each intelligence factor to
+                                    the overall
+                                    assessment.
+                                    Higher percentages indicate factors with greater influence on the final score. The
+                                    federated
+                                    model weighs
+                                    financial data (40%), compliance & legal signals (30%), and market & satellite
+                                    intelligence
+                                    (30%).
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ── Loan Recommendation ── -->
+                        <div class="glass-card loan-card" id="loan-card">
+                            <p class="section-label">Loan Recommendation</p>
+                            <div class="loan-amount" x-text="loan.recommended_loan || 'N/A'"></div>
+                            <div class="metrics-list" style="width:100%">
+                                <div class="loan-detail">
+                                    <span class="label">Interest Rate</span>
+                                    <span class="value" x-text="loan.interest_rate || 'N/A'"></span>
+                                </div>
+                                <div class="loan-detail">
+                                    <span class="label">Tenure</span>
+                                    <span class="value" x-text="loan.tenure || 'N/A'"></span>
+                                </div>
+                                <div class="loan-detail">
+                                    <span class="label">Approval Likelihood</span>
+                                    <span class="value" x-text="loan.approval_likelihood || 'N/A'"></span>
+                                </div>
+                            </div>
+                            <div class="risk-explanation-box">
+                                <div class="risk-explanation-title">💡 Recommendation Rationale</div>
+                                <div class="risk-explanation-text markdown-content"
+                                    x-html="loan.explanation ? marked.parse(loan.explanation) : 'Based on the overall credit assessment.'">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ═══════════════════════════════════════════ -->
+                        <!-- ROW 2: 5Cs of Credit Analysis (FULL WIDTH) -->
+                        <!-- ═══════════════════════════════════════════ -->
+
+                        <div class="glass-card dashboard-full" id="five-cs-card">
+                            <p class="section-label">5Cs of Credit Analysis</p>
+                            <p class="section-title">Comprehensive Creditworthiness Assessment</p>
+                            <p style="color: var(--text-secondary); font-size: 0.88rem; margin-bottom: 16px;">
+                                The 5Cs framework is the gold standard for credit evaluation, providing a holistic view
+                                of a borrower's creditworthiness across five critical dimensions.
+                            </p>
+
+                            <div class="five-cs-grid">
+                                <template x-for="c in fiveCs" :key="c.name">
+                                    <div class="five-c-item">
+                                        <div class="five-c-header">
+                                            <div class="five-c-name">
+                                                <div class="five-c-icon"
+                                                    :style="'background:' + c.color + '22; color:' + c.color"
+                                                    x-text="c.icon"></div>
+                                                <div>
+                                                    <div class="five-c-title" x-text="c.name"></div>
+                                                    <div style="font-size:0.78rem; color:var(--text-muted)"
+                                                        x-text="c.description">
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="five-c-score" :style="'color:' + c.color"
+                                                x-text="c.score + '/100'"></div>
+                                        </div>
+                                        <div class="five-c-bar">
+                                            <div class="five-c-bar-fill"
+                                                :style="'width:' + c.score + '%; background:' + c.color">
+                                            </div>
+                                        </div>
+                                        <div class="five-c-explanation" x-text="c.explanation"></div>
+                                        <div class="five-c-factors">
+                                            <template x-for="f in c.factors" :key="f">
+                                                <div class="five-c-factor" x-text="f"></div>
+                                            </template>
+                                        </div>
+                                    </div>
                                 </template>
                             </div>
                         </div>
-                    </template>
-                </div>
-            </div>
 
-            <!-- ═══════════════════════════════════════════ -->
-            <!-- ROW 3: Risk Narrative (FULL WIDTH)         -->
-            <!-- ═══════════════════════════════════════════ -->
+                        <!-- ═══════════════════════════════════════════ -->
+                        <!-- ROW 3: Risk Narrative (FULL WIDTH)         -->
+                        <!-- ═══════════════════════════════════════════ -->
 
-            <div class="glass-card dashboard-full" id="narrative-card">
-                <p class="section-label">Risk Assessment Summary</p>
-                <div class="risk-explanation-box" style="background: rgba(99,102,241,0.04)">
-                    <div class="risk-explanation-title">📝 AI-Generated Risk Narrative</div>
-                    <div class="risk-explanation-text" style="font-size: 0.92rem; line-height: 1.7"
-                        x-text="riskNarrative"></div>
-                </div>
-            </div>
-
-            <!-- ═══════════════════════════════════════════ -->
-            <!-- ROW 4: Bank Scores + Intelligence + Metrics -->
-            <!-- ═══════════════════════════════════════════ -->
-
-            <!-- ── Bank Scores ── -->
-            <div class="glass-card" id="banks-card">
-                <p class="section-label">Individual Bank Assessments</p>
-                <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 8px;">
-                    Three independent bank models each evaluate the company from a different angle,
-                    then scores are federated into a single consensus.
-                </p>
-                <div class="bank-scores">
-                    <template x-for="bank in bankScores" :key="bank.bank_id">
-                        <div class="bank-score-item">
-                            <div class="bank-info">
-                                <div class="bank-name" x-text="bank.bank_name"></div>
-                                <div class="bank-focus" x-text="'Focus: ' + bank.focus"></div>
+                        <div class="glass-card dashboard-full" id="narrative-card">
+                            <p class="section-label">Risk Assessment Summary</p>
+                            <div class="risk-explanation-box" style="background: rgba(99,102,241,0.04)">
+                                <div class="risk-explanation-title">📝 AI-Generated Risk Narrative</div>
+                                <div class="risk-explanation-text markdown-content"
+                                    style="font-size: 0.92rem; line-height: 1.7" x-html="marked.parse(riskNarrative)">
+                                </div>
                             </div>
-                            <div class="bank-score-value" x-text="bank.score"></div>
                         </div>
-                    </template>
-                </div>
+
+                        <!-- ═══════════════════════════════════════════ -->
+                        <!-- ROW 4: Bank Scores + Intelligence + Metrics -->
+                        <!-- ═══════════════════════════════════════════ -->
+
+                        <!-- ── Bank Scores ── -->
+                        <div class="glass-card" id="banks-card">
+                            <p class="section-label">Individual Bank Assessments</p>
+                            <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 8px;">
+                                Three independent bank models each evaluate the company from a different angle,
+                                then scores are federated into a single consensus.
+                            </p>
+                            <div class="bank-scores">
+                                <template x-for="bank in bankScores" :key="bank.bank_id">
+                                    <div class="bank-score-item">
+                                        <div class="bank-info">
+                                            <div class="bank-name" x-text="bank.bank_name"></div>
+                                            <div class="bank-focus" x-text="'Focus: ' + bank.focus"></div>
+                                        </div>
+                                        <div class="bank-score-value" x-text="bank.score"></div>
+                                    </div>
+                                </template>
+                            </div>
+                            <!-- Bank Assessment Summary -->
+                            <div class="risk-explanation-box"
+                                style="margin-top: 16px; background: rgba(99,102,241,0.04);">
+                                <div class="risk-explanation-title">🏦 Bank Assessment Summary</div>
+                                <div class="risk-explanation-text markdown-content"
+                                    style="font-size: 0.88rem; line-height: 1.65;" x-html="marked.parse(bankSummary)">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ── External Intelligence ── -->
+                        <div class="glass-card" id="intel-card">
+                            <p class="section-label">External Intelligence Signals</p>
+                            <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 8px;">
+                                Real-time signals from news, regulatory, legal, and satellite data sources.
+                            </p>
+                            <div class="signal-grid">
+                                <div class="signal-item">
+                                    <div class="signal-value" style="color: var(--accent-cyan)"
+                                        x-text="intelligence.news_sentiment ?? 'N/A'"></div>
+                                    <div class="signal-label">News Sentiment</div>
+                                    <div class="signal-explanation"
+                                        x-text="intelligence.news_sentiment >= 5 ? 'Positive market perception' : intelligence.news_sentiment >= 0 ? 'Neutral sentiment' : 'Negative sentiment detected'">
+                                    </div>
+                                </div>
+                                <div class="signal-item">
+                                    <div class="signal-value" style="color: var(--accent-emerald)"
+                                        x-text="intelligence.mca_compliance ?? 'N/A'"></div>
+                                    <div class="signal-label">MCA Compliance</div>
+                                    <div class="signal-explanation"
+                                        x-text="intelligence.mca_compliance >= 7 ? 'Strong compliance record' : intelligence.mca_compliance >= 4 ? 'Moderate compliance' : 'Compliance gaps found'">
+                                    </div>
+                                </div>
+                                <div class="signal-item">
+                                    <div class="signal-value" style="color: var(--accent-amber)"
+                                        x-text="intelligence.court_cases ?? 'N/A'"></div>
+                                    <div class="signal-label">Court Cases</div>
+                                    <div class="signal-explanation"
+                                        x-text="intelligence.court_cases === 0 ? 'Clean legal record' : intelligence.court_cases + ' case(s) — adds risk'">
+                                    </div>
+                                </div>
+                                <div class="signal-item">
+                                    <div class="signal-value" style="color: var(--accent-indigo)"
+                                        x-text="intelligence.ndvi_activity ?? 'N/A'"></div>
+                                    <div class="signal-label">NDVI Activity</div>
+                                    <div class="signal-explanation"
+                                        x-text="intelligence.ndvi_activity >= 0.7 ? 'High operational activity' : intelligence.ndvi_activity >= 0.4 ? 'Moderate activity' : 'Low activity detected'">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ── Financial Metrics ── -->
+                        <div class="glass-card" id="financial-card">
+                            <p class="section-label">Extracted Financial Metrics</p>
+                            <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 8px;">
+                                Key financial indicators extracted from uploaded documents.
+                            </p>
+                            <div class="metrics-list">
+                                <div class="metric-item" x-show="financial.turnover">
+                                    <span class="metric-label">Turnover</span>
+                                    <span class="metric-value" x-text="formatCurrency(financial.turnover)"></span>
+                                </div>
+                                <div class="metric-item" x-show="financial.debt_ratio">
+                                    <span class="metric-label">Debt Ratio</span>
+                                    <span class="metric-value"
+                                        x-text="financial.debt_ratio?.toFixed?.(2) ?? financial.debt_ratio"></span>
+                                </div>
+                                <div class="metric-item" x-show="financial.profit_margin">
+                                    <span class="metric-label">Profit Margin</span>
+                                    <span class="metric-value" x-text="formatPercent(financial.profit_margin)"></span>
+                                </div>
+                                <div class="metric-item" x-show="financial.capacity_utilization">
+                                    <span class="metric-label">Capacity Utilization</span>
+                                    <span class="metric-value" x-text="financial.capacity_utilization"></span>
+                                </div>
+                            </div>
+                            <div class="risk-explanation-box">
+                                <div class="risk-explanation-title">📈 Financial Health Summary</div>
+                                <div class="risk-explanation-text markdown-content"
+                                    x-html="marked.parse(getFinancialSummary())"></div>
+                            </div>
+                        </div>
+
+                        <!-- ═══════════════════════════════════════════ -->
+                        <!-- ROW 5: Download Report (FULL WIDTH)        -->
+                        <!-- ═══════════════════════════════════════════ -->
+
+                        <div class="glass-card report-card dashboard-full" id="report-card">
+                            <p class="section-label">Credit Appraisal Memorandum (CAM)</p>
+                            <p style="color: var(--text-secondary); margin-bottom: 16px; max-width: 600px;">
+                                Download the comprehensive CAM Report containing officer assessment, before/after
+                                federated score analysis, 5Cs assessment, detailed risk narrative, individual bank
+                                evaluations with summary, financial metrics, and loan recommendation.
+                            </p>
+                            <button class="btn-download" @click="downloadReport()" id="download-btn">
+                                📥 Download CAM Report PDF
+                            </button>
+                        </div>
+
+
+
+                    </div>
+                </div> <!-- End Active Dashboard -->
             </div>
-
-            <!-- ── External Intelligence ── -->
-            <div class="glass-card" id="intel-card">
-                <p class="section-label">External Intelligence Signals</p>
-                <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 8px;">
-                    Real-time signals from news, regulatory, legal, and satellite data sources.
-                </p>
-                <div class="signal-grid">
-                    <div class="signal-item">
-                        <div class="signal-value" style="color: var(--accent-cyan)"
-                            x-text="intelligence.news_sentiment ?? 'N/A'"></div>
-                        <div class="signal-label">News Sentiment</div>
-                        <div class="signal-explanation"
-                            x-text="intelligence.news_sentiment >= 5 ? 'Positive market perception' : intelligence.news_sentiment >= 0 ? 'Neutral sentiment' : 'Negative sentiment detected'">
-                        </div>
-                    </div>
-                    <div class="signal-item">
-                        <div class="signal-value" style="color: var(--accent-emerald)"
-                            x-text="intelligence.mca_compliance ?? 'N/A'"></div>
-                        <div class="signal-label">MCA Compliance</div>
-                        <div class="signal-explanation"
-                            x-text="intelligence.mca_compliance >= 7 ? 'Strong compliance record' : intelligence.mca_compliance >= 4 ? 'Moderate compliance' : 'Compliance gaps found'">
-                        </div>
-                    </div>
-                    <div class="signal-item">
-                        <div class="signal-value" style="color: var(--accent-amber)"
-                            x-text="intelligence.court_cases ?? 'N/A'"></div>
-                        <div class="signal-label">Court Cases</div>
-                        <div class="signal-explanation"
-                            x-text="intelligence.court_cases === 0 ? 'Clean legal record' : intelligence.court_cases + ' case(s) — adds risk'">
-                        </div>
-                    </div>
-                    <div class="signal-item">
-                        <div class="signal-value" style="color: var(--accent-indigo)"
-                            x-text="intelligence.ndvi_activity ?? 'N/A'"></div>
-                        <div class="signal-label">NDVI Activity</div>
-                        <div class="signal-explanation"
-                            x-text="intelligence.ndvi_activity >= 0.7 ? 'High operational activity' : intelligence.ndvi_activity >= 0.4 ? 'Moderate activity' : 'Low activity detected'">
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- ── Financial Metrics ── -->
-            <div class="glass-card" id="financial-card">
-                <p class="section-label">Extracted Financial Metrics</p>
-                <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 8px;">
-                    Key financial indicators extracted from uploaded documents.
-                </p>
-                <div class="metrics-list">
-                    <div class="metric-item" x-show="financial.turnover">
-                        <span class="metric-label">Turnover</span>
-                        <span class="metric-value" x-text="formatCurrency(financial.turnover)"></span>
-                    </div>
-                    <div class="metric-item" x-show="financial.debt_ratio">
-                        <span class="metric-label">Debt Ratio</span>
-                        <span class="metric-value"
-                            x-text="financial.debt_ratio?.toFixed?.(2) ?? financial.debt_ratio"></span>
-                    </div>
-                    <div class="metric-item" x-show="financial.profit_margin">
-                        <span class="metric-label">Profit Margin</span>
-                        <span class="metric-value" x-text="formatPercent(financial.profit_margin)"></span>
-                    </div>
-                    <div class="metric-item" x-show="financial.capacity_utilization">
-                        <span class="metric-label">Capacity Utilization</span>
-                        <span class="metric-value" x-text="financial.capacity_utilization"></span>
-                    </div>
-                </div>
-                <div class="risk-explanation-box">
-                    <div class="risk-explanation-title">📈 Financial Health Summary</div>
-                    <div class="risk-explanation-text" x-text="getFinancialSummary()"></div>
-                </div>
-            </div>
-
-            <!-- ═══════════════════════════════════════════ -->
-            <!-- ROW 5: Download Report (FULL WIDTH)        -->
-            <!-- ═══════════════════════════════════════════ -->
-
-            <div class="glass-card report-card dashboard-full" id="report-card">
-                <p class="section-label">Credit Report</p>
-                <p style="color: var(--text-secondary); margin-bottom: 16px; max-width: 600px;">
-                    Download a comprehensive PDF credit report containing all analysis results,
-                    5Cs assessment, risk breakdown, financial metrics, and loan recommendation.
-                </p>
-                <button class="btn-download" @click="downloadReport()" id="download-btn">
-                    📥 Download Credit Report PDF
-                </button>
-            </div>
-
         </div>
     </div>
 
