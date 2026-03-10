@@ -341,9 +341,6 @@
 
   <!-- Top Navigation (Auth) -->
   <div class="absolute top-6 right-8 z-50 mix-blend-difference" x-data="{ token: localStorage.getItem('token') }">
-    <template x-if="!token">
-      <a href="/login" class="text-indigo-400 font-semibold hover:text-indigo-300 transition-colors">Sign In</a>
-    </template>
     <template x-if="token">
       <a href="/dashboard" class="text-indigo-400 font-semibold hover:text-indigo-300 transition-colors">My Dashboard
         &rarr;</a>

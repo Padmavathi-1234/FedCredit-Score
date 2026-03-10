@@ -50,8 +50,8 @@ for subdir in ("css", "js", "assets"):
 
 @app.get("/")
 async def serve_landing():
-    # Start directly on the document upload page
-    return FileResponse(str(FRONTEND_DIR / "index.html"))
+    # Start on the new landing page
+    return FileResponse(str(FRONTEND_DIR / "landing.html"))
 
 
 @app.get("/upload")
